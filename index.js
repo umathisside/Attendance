@@ -5,7 +5,12 @@ const bodyParser = require('body-parser');
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('public')); // Serves frontend UI
+const path = require('path');
+app.use(express.static(path.join(__dirname, '../public')));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
 
 // --- IN-MEMORY DATABASE (For Project Demo) ---
 const DB = {

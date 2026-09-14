@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Campus Portal</title>
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --bg: #F3F4F6;
+      --card: #FFFFFF;
+      --text: #1F2937;
+      --danger: #EF4444;
+      --success: #10B981;
+    }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 20px; }
+    .nav { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+    .nav button { padding: 10px 20px; border: none; background: #E5E7EB; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    .nav button.active { background: var(--primary); color: white; }
+    .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    h2 { margin-top: 0; color: var(--primary); }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #E5E7EB; padding: 10px; text-align: left; }
+    .alert { background: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-weight: bold; }
+    .badge-present { color: var(--success); font-weight: bold; }
+    .badge-absent { color: var(--danger); font-weight: bold; }
+    input, select, button { padding: 8px 12px; border: 1px solid #D1D5DB; border-radius: 6px; margin: 5px 0; }
+    .btn-submit { background: var(--primary); color: white; border: none; cursor: pointer; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>🎓 Campus Sync Portal</h1>
+    <p>College Attendance & Academic Management System</p>
+  </div>
+
+  <div class="nav">
+    <button id="btn-teacher" class="active" onclick="switchRole('teacher')">👨‍🏫 Teacher Portal</button>
+    <button id="btn-student" onclick="switchRole('student')">👨‍🎓 Student / Parent View</button>
+  </div>
+
+  <!-- BUNK ALERTS BANNER -->
+  <div id="alert-box" style="display: none;"></div>
+
+  <!-- TEACHER VIEW -->
+  <div id="teacher-view" class="card">
+    <h2>Take Class Attendance</h2>
+    <label>Date: </label>
+    <input type="date" id="att-date"><br><br>
+    <label>Select Lecture: </label>
+    <select id="lecture-select"></select>
+
+    <h3>Students List</h3>
+    <table>
+      <thead>
+        <tr><th>Student ID</th><th>Name</th><th>Status</th></tr>
+      </thead>
+      <tbody id="attendance-table-body"></tbody>
+    </table>
+    <br>
+    <button class="btn-submit" onclick="submitAttendance()">Submit Attendance</button>
+
+    <hr style="margin: 30px 0;">
+
+    <h2>Post New Assignment</h2>
+    <form onsubmit="postAssignment(event)">
+      <input type="text" id="assign-subject" placeholder="Subject" required><br>
+      <input type="text" id="assign-title" placeholder="Assignment Title" required><br>
+      <input type="date" id="assign-due" required><br>
+      <textarea id="assign-details" placeholder="Instructions/Details" style="width: 100%; height: 60px;"></textarea><br>
+      <button type="submit" class="btn-submit">Post Assignment</button>
+    </form>
+  </div>
+
+  <!-- STUDENT / PARENT VIEW -->
+  <div id="student-view" class="card" style="display: none;">
+    <h2>Student Dashboard</h2>
+    <p>Viewing Status for: <strong>Aarav Patel (S1)</strong></p>
+
+    <h3>Today's Timetable</h3>
+    <ul id="timetable-list"></ul>
+
+    <h3>Assignments & Important Notices</h3>
+    <div id="assignment-list"></div>
+
+    <h3>Recent Attendance History</h3>
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Lecture ID</th><th>Status</th></tr>
+      </thead>
+      <tbody id="student-history-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const API_BASE = 'http://localhost:3000/api';
+  document.getElementById('att-date').valueAsDate = new Date();
+
+  function switchRole(role) {
+    document.getElementById('btn-teacher').classList.toggle('active', role === 'teacher');
+    document.getElementById('btn-student').classList.toggle('active', role === 'student');
+    document.getElementById('teacher-view').style.display = role === 'teacher' ? 'block' : 'none';
+    document.getElementById('student-view').style.display = role === 'student' ? 'block' : 'none';
+    if(role === 'student') loadStudentData();
+  }
+
+  // Load Initial Data
+  async function init() {
+    // Load Timetable & Lectures
+    const ttRes = await fetch(`${API_BASE}/timetable`);
+    const timetable = await ttRes.json();
+    
+    const lecSelect = document.getElementById('lecture-select');
+    const ttList = document.getElementById('timetable-list');
+    
+    lecSelect.innerHTML = '';
+    ttList.innerHTML = '';
+
+    timetable.forEach(lec => {
+      lecSelect.innerHTML += `<option value="${lec.id}">${lec.name} (${lec.time})</option>`;
+      ttList.innerHTML += `<li><strong>${lec.time}</strong> - ${lec.name}</li>`;
+    });
+
+    // Load Students for Teacher Attendance Table
+    const stRes = await fetch(`${API_BASE}/students`);
+    const students = await stRes.json();
+    const stBody = document.getElementById('attendance-table-body');
+    stBody.innerHTML = '';
+
+    students.forEach(st => {
+      stBody.innerHTML += `
+        <tr>
+          <td>${st.id}</td>
+          <td>${st.name}</td>
+          <td>
+            <select data-studentid="${st.id}">
+              <option value="present">Present</option>
+              <option value="absent">Absent</option>
+            </select>
+          </td>
+        </tr>`;
+    });
+
+    checkBunkAlerts();
+  }
+
+  async function submitAttendance() {
+    const date = document.getElementById('att-date').value;
+    const lectureId = document.getElementById('lecture-select').value;
+    const rows = document.querySelectorAll('#attendance-table-body tr');
+    
+    const records = Array.from(rows).map(row => {
+      const studentId = row.querySelector('select').dataset.studentid;
+      const status = row.querySelector('select').value;
+      return { studentId, status };
+    });
+
+    const res = await fetch(`${API_BASE}/attendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, lectureId, records })
+    });
+    
+    const data = await res.json();
+    alert(data.message);
+    checkBunkAlerts();
+  }
+
+  async function checkBunkAlerts() {
+    const res = await fetch(`${API_BASE}/bunks`);
+    const bunks = await res.json();
+    const alertBox = document.getElementById('alert-box');
+    
+    if (bunks.length > 0) {
+      alertBox.style.display = 'block';
+      alertBox.className = 'alert';
+      alertBox.innerHTML = '🚨 <strong>Bunk Notification Alert:</strong><br>' + 
+        bunks.map(b => `• ${b.message}`).join('<br>');
+    }
+  }
+
+  async function postAssignment(e) {
+    e.preventDefault();
+    const payload = {
+      subject: document.getElementById('assign-subject').value,
+      title: document.getElementById('assign-title').value,
+      dueDate: document.getElementById('assign-due').value,
+      details: document.getElementById('assign-details').value
+    };
+
+    await fetch(`${API_BASE}/assignments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    alert('Assignment Posted Successfully!');
+  }
+
+  async function loadStudentData() {
+    const res = await fetch(`${API_BASE}/student-summary/S1`);
+    const data = await res.json();
+
+    // Render Assignments
+    const assignDiv = document.getElementById('assignment-list');
+    assignDiv.innerHTML = data.assignments.map(a => `
+      <div style="background:#F9FAFB; border-left: 4px solid var(--primary); padding: 10px; margin-bottom: 10px;">
+        <strong>[${a.subject}] ${a.title}</strong> (Due: ${a.dueDate})
+        <p style="margin: 5px 0 0 0; font-size: 14px;">${a.details}</p>
+      </div>
+    `).join('');
+
+    // Render Attendance History
+    const historyBody = document.getElementById('student-history-body');
+    historyBody.innerHTML = data.attendance.map(a => `
+      <tr>
+        <td>${a.date}</td>
+        <td>${a.lectureId}</td>
+        <td class="badge-${a.status}">${a.status.toUpperCase()}</td>
+      </tr>
+    `).join('');
+  }
+
+  init();
+</script>
+</body>
+</html>
